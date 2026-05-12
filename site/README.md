@@ -1,6 +1,6 @@
 # IIS Static Machine Info Site
 
-This folder contains a simple IIS-hosted page that displays server details.
+This folder contains a simple IIS-hosted static HTML page that displays server details.
 
 ## What it shows
 
@@ -11,21 +11,13 @@ This folder contains a simple IIS-hosted page that displays server details.
 
 ## Requirements
 
-- IIS with **Server Side Includes** feature enabled.
-
-On Windows Server, install with PowerShell:
-
-```powershell
-Install-WindowsFeature Web-Server, Web-Includes
-```
+- IIS with static content support (included in standard Web Server install).
 
 ## Deploy
 
 1. Copy files in this folder to your IIS site root.
-2. Ensure `index.shtml` is present.
+2. Ensure `index.html` is present.
 3. Browse to the site URL.
-
-If SSI is not enabled, the `<!--#echo ... -->` values will not render.
 
 ## Automated setup script
 

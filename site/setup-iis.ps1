@@ -58,7 +58,7 @@ if (-not (Test-Path -Path $PhysicalPath)) {
     New-Item -Path $PhysicalPath -ItemType Directory -Force | Out-Null
 }
 
-function Set-IisSiteStaticSsiConfiguration {
+function Set-IisSiteStaticConfiguration {
     param(
         [Parameter(Mandatory = $true)]
         [string]$SiteName
@@ -67,24 +67,11 @@ function Set-IisSiteStaticSsiConfiguration {
     $psPath = "IIS:\"
     $location = $SiteName
 
-    $ssiSection = Get-WebConfiguration -PSPath $psPath -Location $location -Filter "system.webServer/serverSideInclude"
-    if (-not $ssiSection) {
-        throw "IIS section 'system.webServer/serverSideInclude' is unavailable. Ensure the IIS Server Side Includes feature is installed."
-    }
-    Set-WebConfigurationProperty -PSPath $psPath -Location $location -Filter "system.webServer/serverSideInclude" -Name "enabled" -Value $true
-
     Clear-WebConfiguration -PSPath $psPath -Location $location -Filter "system.webServer/defaultDocument/files"
-    Add-WebConfigurationProperty -PSPath $psPath -Location $location -Filter "system.webServer/defaultDocument/files" -Name "." -Value @{ value = "index.shtml" }
-
-    $existingShtmlMime = Get-WebConfigurationProperty -PSPath $psPath -Location $location -Filter "system.webServer/staticContent" -Name "." |
-        Where-Object { $_.fileExtension -eq ".shtml" }
-    if ($existingShtmlMime) {
-        Remove-WebConfigurationProperty -PSPath $psPath -Location $location -Filter "system.webServer/staticContent" -Name "." -AtElement @{ fileExtension = ".shtml" }
-    }
-    Add-WebConfigurationProperty -PSPath $psPath -Location $location -Filter "system.webServer/staticContent" -Name "." -Value @{ fileExtension = ".shtml"; mimeType = "text/html" }
+    Add-WebConfigurationProperty -PSPath $psPath -Location $location -Filter "system.webServer/defaultDocument/files" -Name "." -Value @{ value = "index.html" }
 }
 
-$filesToCopy = @("index.shtml")
+$filesToCopy = @("index.html")
 $tempDir = $null
 
 function Get-PrimaryIPv4Address {
@@ -150,14 +137,19 @@ if ([string]::IsNullOrWhiteSpace($machineIpAddress)) {
     $machineIpAddress = "Unavailable"
 }
 
-$indexPath = Join-Path $PhysicalPath "index.shtml"
+$indexPath = Join-Path $PhysicalPath "index.html"
 $indexContent = Get-Content -Path $indexPath -Raw
-$indexContent = $indexContent.Replace('<!--#echo var="SERVER_NAME" -->', $machineHostName)
-$indexContent = $indexContent.Replace('<!--#echo var="LOCAL_ADDR" -->', $machineIpAddress)
+$indexContent = $indexContent.Replace('{{SERVER_NAME}}', $machineHostName)
+$indexContent = $indexContent.Replace('{{LOCAL_ADDR}}', $machineIpAddress)
+$indexContent = $indexContent.Replace('{{SERVER_PORT}}', $Port)
+$indexContent = $indexContent.Replace('{{DATE_GMT}}', [DateTime]::UtcNow.ToString("yyyy-MM-dd HH:mm:ss 'UTC'"))
 Set-Content -Path $indexPath -Value $indexContent
 
 if (Test-Path -Path (Join-Path $PhysicalPath "web.config")) {
     Remove-Item -Path (Join-Path $PhysicalPath "web.config") -Force -ErrorAction SilentlyContinue
+}
+if (Test-Path -Path (Join-Path $PhysicalPath "index.shtml")) {
+    Remove-Item -Path (Join-Path $PhysicalPath "index.shtml") -Force -ErrorAction SilentlyContinue
 }
 
 $appPoolName = "$SiteName-AppPool"
@@ -211,9 +203,9 @@ if (Get-Website -Name $SiteName -ErrorAction SilentlyContinue) {
     New-Website -Name $SiteName -PhysicalPath $PhysicalPath -Port $Port -HostHeader $HostHeader -ApplicationPool $appPoolName | Out-Null
 }
 
-Write-Host "Applying IIS SSI/static content/default document configuration..." -ForegroundColor Cyan
+Write-Host "Applying IIS default document configuration..." -ForegroundColor Cyan
 try {
-    Set-IisSiteStaticSsiConfiguration -SiteName $SiteName
+    Set-IisSiteStaticConfiguration -SiteName $SiteName
 } catch {
     throw "Failed to apply IIS site configuration for '$SiteName'. Original error: $($_.Exception.Message)"
 }
