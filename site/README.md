@@ -15,13 +15,13 @@ This folder contains a simple IIS-hosted static HTML page that displays server d
 
 ## Deploy
 
-1. Copy files in this folder to your IIS site root.
-2. Ensure `index.html` is present.
+1. Run `setup-iis.ps1` as Administrator.
+2. The script creates `index.html` in the configured IIS physical path.
 3. Browse to the site URL.
 
 ## Automated setup script
 
-Run this as Administrator to install IIS features and create a dedicated website:
+Run this as Administrator to install IIS features, create a dedicated website, and generate `index.html`:
 
 ```powershell
 ./setup-iis.ps1

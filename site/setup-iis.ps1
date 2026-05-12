@@ -3,10 +3,6 @@ param(
     [string]$PhysicalPath = "C:\inetpub\wwwroot\machine-info",
     [int]$Port = 80,
     [string]$HostHeader = "",
-    [string]$RepoOwner = "wesleycamargo",
-    [string]$RepoName = "iis-website-config",
-    [string]$RepoRef = "main",
-    [string]$RepoSubPath = "site",
     [switch]$TakeOverBinding = $true
 )
 
@@ -71,9 +67,6 @@ function Set-IisSiteStaticConfiguration {
     Add-WebConfigurationProperty -PSPath $psPath -Location $location -Filter "system.webServer/defaultDocument/files" -Name "." -Value @{ value = "index.html" }
 }
 
-$filesToCopy = @("index.html")
-$tempDir = $null
-
 function Get-PrimaryIPv4Address {
     $candidates = @()
 
@@ -97,40 +90,6 @@ function Get-PrimaryIPv4Address {
     return ($candidates | Select-Object -First 1)
 }
 
-try {
-    $zipUrl = "https://codeload.github.com/$RepoOwner/$RepoName/zip/refs/heads/$RepoRef"
-    $tempDir = Join-Path $env:TEMP ("iis-setup-" + [guid]::NewGuid().ToString("N"))
-    $zipPath = Join-Path $tempDir "repo.zip"
-    $extractPath = Join-Path $tempDir "repo"
-
-    New-Item -Path $tempDir -ItemType Directory -Force | Out-Null
-    Write-Host "Downloading site content from GitHub ($RepoOwner/$RepoName@$RepoRef)..." -ForegroundColor Cyan
-    Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath
-
-    Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force
-
-    $repoRoot = Join-Path $extractPath ("$RepoName-$RepoRef")
-    $contentRoot = Join-Path $repoRoot $RepoSubPath
-
-    if (-not (Test-Path -Path $contentRoot)) {
-        throw "Repository subpath not found in archive: $RepoSubPath"
-    }
-
-    foreach ($file in $filesToCopy) {
-        $source = Join-Path $contentRoot $file
-        if (-not (Test-Path -Path $source)) {
-            throw "Required file not found in repository content: $source"
-        }
-        Copy-Item -Path $source -Destination (Join-Path $PhysicalPath $file) -Force
-    }
-} catch {
-    throw "Failed to download or extract website content from GitHub ($RepoOwner/$RepoName@$RepoRef): $($_.Exception.Message)"
-} finally {
-    if ($tempDir -and (Test-Path -Path $tempDir)) {
-        Remove-Item -Path $tempDir -Recurse -Force -ErrorAction SilentlyContinue
-    }
-}
-
 $machineHostName = [System.Net.Dns]::GetHostName()
 $machineIpAddress = Get-PrimaryIPv4Address
 if ([string]::IsNullOrWhiteSpace($machineIpAddress)) {
@@ -138,7 +97,39 @@ if ([string]::IsNullOrWhiteSpace($machineIpAddress)) {
 }
 
 $indexPath = Join-Path $PhysicalPath "index.html"
-$indexContent = Get-Content -Path $indexPath -Raw
+$indexContent = @"
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Machine Info</title>
+</head>
+<body>
+  <h1>Machine Info</h1>
+  <p>Served by IIS as static HTML</p>
+
+  <table>
+    <tr>
+      <td>Hostname</td>
+      <td>{{SERVER_NAME}}</td>
+    </tr>
+    <tr>
+      <td>Server IP</td>
+      <td>{{LOCAL_ADDR}}</td>
+    </tr>
+    <tr>
+      <td>Server Port</td>
+      <td>{{SERVER_PORT}}</td>
+    </tr>
+    <tr>
+      <td>Timestamp (UTC)</td>
+      <td>{{DATE_GMT}}</td>
+    </tr>
+  </table>
+</body>
+</html>
+"@
 $indexContent = $indexContent.Replace('{{SERVER_NAME}}', $machineHostName)
 $indexContent = $indexContent.Replace('{{LOCAL_ADDR}}', $machineIpAddress)
 $indexContent = $indexContent.Replace('{{SERVER_PORT}}', $Port)
