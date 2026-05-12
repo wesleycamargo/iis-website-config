@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Machine Info</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="card">
+    <h1>Machine Info</h1>
+    <p class="subtitle">Served by IIS using Server Side Includes (SSI)</p>
+
+    <dl class="info-grid">
+      <div>
+        <dt>Hostname</dt>
+        <dd><!--#echo var="SERVER_NAME" --></dd>
+      </div>
+      <div>
+        <dt>Server IP</dt>
+        <dd><!--#echo var="LOCAL_ADDR" --></dd>
+      </div>
+      <div>
+        <dt>Server Port</dt>
+        <dd><!--#echo var="SERVER_PORT" --></dd>
+      </div>
+      <div>
+        <dt>Timestamp (UTC)</dt>
+        <dd><!--#echo var="DATE_GMT" --></dd>
+      </div>
+    </dl>
+  </main>
+</body>
+</html>
