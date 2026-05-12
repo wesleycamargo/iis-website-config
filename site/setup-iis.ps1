@@ -58,49 +58,25 @@ if (-not (Test-Path -Path $PhysicalPath)) {
     New-Item -Path $PhysicalPath -ItemType Directory -Force | Out-Null
 }
 
-function Repair-WebConfigForSsi {
+function Set-IisSiteStaticSsiConfiguration {
     param(
         [Parameter(Mandatory = $true)]
-        [string]$WebConfigPath
+        [string]$SiteName
     )
 
-    [xml]$xml = Get-Content -Path $WebConfigPath
+    $psPath = "IIS:\"
+    $location = $SiteName
 
-    if (-not $xml.configuration) {
-        throw "Invalid web.config: missing <configuration> root node."
-    }
+    Set-WebConfigurationProperty -PSPath $psPath -Location $location -Filter "system.webServer/serverSideInclude" -Name "enabled" -Value "True"
 
-    $configuration = $xml.configuration
-    $systemWebServer = $configuration.SelectSingleNode("system.webServer")
-    if (-not $systemWebServer) {
-        $systemWebServer = $xml.CreateElement("system.webServer")
-        [void]$configuration.AppendChild($systemWebServer)
-    }
+    Clear-WebConfiguration -PSPath $psPath -Location $location -Filter "system.webServer/defaultDocument/files"
+    Add-WebConfigurationProperty -PSPath $psPath -Location $location -Filter "system.webServer/defaultDocument/files" -Name "." -Value @{ value = "index.shtml" }
 
-    $ssiNode = $systemWebServer.SelectSingleNode("serverSideInclude")
-    if (-not $ssiNode) {
-        $ssiNode = $xml.CreateElement("serverSideInclude")
-        [void]$systemWebServer.PrependChild($ssiNode)
-    }
-
-    [void]$ssiNode.SetAttribute("enabled", "true")
-
-    $systemWeb = $configuration.SelectSingleNode("system.web")
-    if ($systemWeb) {
-        $invalidSsiNodes = @($systemWeb.SelectNodes("serverSideInclude"))
-        foreach ($node in $invalidSsiNodes) {
-            [void]$systemWeb.RemoveChild($node)
-        }
-
-        if ($systemWeb.ChildNodes.Count -eq 0 -and $systemWeb.Attributes.Count -eq 0) {
-            [void]$configuration.RemoveChild($systemWeb)
-        }
-    }
-
-    $xml.Save($WebConfigPath)
+    Remove-WebConfigurationProperty -PSPath $psPath -Location $location -Filter "system.webServer/staticContent" -Name "." -AtElement @{ fileExtension = ".shtml" } -ErrorAction SilentlyContinue
+    Add-WebConfigurationProperty -PSPath $psPath -Location $location -Filter "system.webServer/staticContent" -Name "." -Value @{ fileExtension = ".shtml"; mimeType = "text/html" }
 }
 
-$filesToCopy = @("index.shtml", "web.config")
+$filesToCopy = @("index.shtml")
 $tempDir = $null
 
 function Get-PrimaryIPv4Address {
@@ -172,9 +148,9 @@ $indexContent = $indexContent.Replace('<!--#echo var="SERVER_NAME" -->', $machin
 $indexContent = $indexContent.Replace('<!--#echo var="LOCAL_ADDR" -->', $machineIpAddress)
 Set-Content -Path $indexPath -Value $indexContent
 
-$webConfigPath = Join-Path $PhysicalPath "web.config"
-Write-Host "Validating SSI configuration in web.config..." -ForegroundColor Cyan
-Repair-WebConfigForSsi -WebConfigPath $webConfigPath
+if (Test-Path -Path (Join-Path $PhysicalPath "web.config")) {
+    Remove-Item -Path (Join-Path $PhysicalPath "web.config") -Force -ErrorAction SilentlyContinue
+}
 
 $appPoolName = "$SiteName-AppPool"
 
@@ -227,10 +203,11 @@ if (Get-Website -Name $SiteName -ErrorAction SilentlyContinue) {
     New-Website -Name $SiteName -PhysicalPath $PhysicalPath -Port $Port -HostHeader $HostHeader -ApplicationPool $appPoolName | Out-Null
 }
 
+Write-Host "Applying IIS SSI/static content/default document configuration..." -ForegroundColor Cyan
 try {
-    & "$env:windir\System32\inetsrv\appcmd.exe" list config "$SiteName" /section:system.webServer/serverSideInclude | Out-Null
+    Set-IisSiteStaticSsiConfiguration -SiteName $SiteName
 } catch {
-    throw "IIS configuration validation failed for '$webConfigPath'. Original error: $($_.Exception.Message)"
+    throw "Failed to apply IIS site configuration for '$SiteName'. Original error: $($_.Exception.Message)"
 }
 
 $siteState = (Get-Website -Name $SiteName).State

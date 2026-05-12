@@ -1,22 +1,27 @@
 # AGENTS.md
 
-## Repo reality (verify first)
-- This repository currently only contains devcontainer setup under `.devcontainer/`.
-- There are no app/library source files, no test suite, and no package/build manifests at repo root.
-- Treat this as environment/bootstrap infrastructure unless new project files are added.
+## Repo shape (current)
+- This repo has two concerns only: devcontainer setup in `.devcontainer/` and an IIS static SSI site in `site/`.
+- There is no root app, no package/build manifests, no test/lint/typecheck config, and no CI workflows.
 
-## High-signal files
-- `.devcontainer/devcontainer.json`: container definition, mounted host credentials, shell defaults.
-- `.devcontainer/Dockerfile`: base image and installed tooling (PowerShell, Node.js 20, global `opencode-ai`).
-- `.devcontainer/devcontainer-lock.json`: pinned devcontainer feature digests.
+## High-value files
+- `site/setup-iis.ps1`: primary automation; installs IIS features, downloads `site/` from GitHub, configures bindings/site/app pool, and validates SSI config.
+- `site/web.config`: enables SSI (`serverSideInclude`), sets `index.shtml` as default document, and maps `.shtml` to `text/html`.
+- `site/index.shtml`: page template using SSI echo variables.
+- `.devcontainer/devcontainer.json` + `.devcontainer/Dockerfile`: PowerShell-first dev environment and installed tooling.
 
-## Toolchain and environment quirks
-- Default interactive shell is PowerShell (`pwsh`), not bash.
-- `postCreateCommand` changes `vscode` user's shell to `pwsh`; assume PowerShell-first workflows when adding scripts.
-- Node.js 20 is explicitly installed in the container.
-- Devcontainer mounts host `~/.gitconfig`, `~/.git-credentials`, and OpenCode auth (`~/.local/share/opencode/auth.json`) into `/root/...`; do not commit or expose credential material.
+## Commands you can trust
+- Local IIS setup (Windows, elevated PowerShell): `./site/setup-iis.ps1`
+- Optional conflict behavior (from script):
+  - Take over conflicting HTTP binding (default): `./site/setup-iis.ps1 -TakeOverBinding:$true`
+  - Fail on binding conflict: `./site/setup-iis.ps1 -TakeOverBinding:$false`
 
-## Change guidance for agents
-- If asked to add project automation (test/lint/build), define commands explicitly because no repo standard exists yet.
-- Prefer updating `.devcontainer/devcontainer.json` + `.devcontainer/Dockerfile` together when changing developer environment behavior.
-- Re-verify assumptions with file inspection before claiming the repo has runtime entrypoints or CI workflows.
+## IIS/SSI gotchas
+- If `site/web.config` is removed, equivalent IIS site/server-level settings must be configured manually or SSI/default document behavior will break.
+- `setup-iis.ps1` expects to run as Administrator and throws if not elevated.
+- The setup script rewrites `site/index.shtml` in deployment path by replacing `SERVER_NAME` and `LOCAL_ADDR` SSI placeholders with concrete machine values.
+
+## Devcontainer quirks
+- Default shell is `pwsh` (`postCreateCommand` changes `vscode` shell); prefer PowerShell snippets when documenting commands.
+- Devcontainer mounts host OpenCode auth into `/root/.local/share/opencode/auth.json`; never print or commit credential-bearing files.
+- Dockerfile installs Node.js 20 and global `opencode-ai`; treat these as environment dependencies, not project runtime deps.

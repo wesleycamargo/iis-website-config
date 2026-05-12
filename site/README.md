@@ -35,10 +35,10 @@ Run this as Administrator to install IIS features and create a dedicated website
 ./setup-iis.ps1
 ```
 
-One-line install (downloads installer from this repository and runs it):
+One-line install with `iex` (downloads installer from this repository and runs it):
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -Command "& { $s=Join-Path $env:TEMP 'setup-iis.ps1'; Invoke-WebRequest 'https://raw.githubusercontent.com/wesleycamargo/iis-website-config/main/site/setup-iis.ps1' -OutFile $s; & $s }"
+iex ((New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/wesleycamargo/iis-website-config/main/site/setup-iis.ps1'))
 ```
 
 Optional parameters:
