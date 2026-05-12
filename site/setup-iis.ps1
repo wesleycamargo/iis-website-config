@@ -67,12 +67,20 @@ function Set-IisSiteStaticSsiConfiguration {
     $psPath = "IIS:\"
     $location = $SiteName
 
-    Set-WebConfigurationProperty -PSPath $psPath -Location $location -Filter "system.webServer/serverSideInclude" -Name "enabled" -Value "True"
+    $ssiSection = Get-WebConfiguration -PSPath $psPath -Location $location -Filter "system.webServer/serverSideInclude"
+    if (-not $ssiSection) {
+        throw "IIS section 'system.webServer/serverSideInclude' is unavailable. Ensure the IIS Server Side Includes feature is installed."
+    }
+    Set-WebConfigurationProperty -PSPath $psPath -Location $location -Filter "system.webServer/serverSideInclude" -Name "enabled" -Value $true
 
     Clear-WebConfiguration -PSPath $psPath -Location $location -Filter "system.webServer/defaultDocument/files"
     Add-WebConfigurationProperty -PSPath $psPath -Location $location -Filter "system.webServer/defaultDocument/files" -Name "." -Value @{ value = "index.shtml" }
 
-    Remove-WebConfigurationProperty -PSPath $psPath -Location $location -Filter "system.webServer/staticContent" -Name "." -AtElement @{ fileExtension = ".shtml" } -ErrorAction SilentlyContinue
+    $existingShtmlMime = Get-WebConfigurationProperty -PSPath $psPath -Location $location -Filter "system.webServer/staticContent" -Name "." |
+        Where-Object { $_.fileExtension -eq ".shtml" }
+    if ($existingShtmlMime) {
+        Remove-WebConfigurationProperty -PSPath $psPath -Location $location -Filter "system.webServer/staticContent" -Name "." -AtElement @{ fileExtension = ".shtml" }
+    }
     Add-WebConfigurationProperty -PSPath $psPath -Location $location -Filter "system.webServer/staticContent" -Name "." -Value @{ fileExtension = ".shtml"; mimeType = "text/html" }
 }
 
