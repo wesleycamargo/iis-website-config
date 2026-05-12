@@ -103,6 +103,29 @@ function Repair-WebConfigForSsi {
 $filesToCopy = @("index.shtml", "styles.css", "web.config")
 $tempDir = $null
 
+function Get-PrimaryIPv4Address {
+    $candidates = @()
+
+    if (Get-Command Get-NetIPAddress -ErrorAction SilentlyContinue) {
+        $candidates = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+            Where-Object {
+                $_.IPAddress -and
+                $_.IPAddress -ne "127.0.0.1" -and
+                $_.PrefixOrigin -ne "WellKnown"
+            } |
+            Select-Object -ExpandProperty IPAddress
+    }
+
+    if (-not $candidates) {
+        $candidates = [System.Net.Dns]::GetHostAddresses([System.Net.Dns]::GetHostName()) |
+            Where-Object { $_.AddressFamily -eq [System.Net.Sockets.AddressFamily]::InterNetwork } |
+            ForEach-Object { $_.IPAddressToString } |
+            Where-Object { $_ -ne "127.0.0.1" }
+    }
+
+    return ($candidates | Select-Object -First 1)
+}
+
 try {
     $zipUrl = "https://codeload.github.com/$RepoOwner/$RepoName/zip/refs/heads/$RepoRef"
     $tempDir = Join-Path $env:TEMP ("iis-setup-" + [guid]::NewGuid().ToString("N"))
@@ -136,6 +159,18 @@ try {
         Remove-Item -Path $tempDir -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
+
+$machineHostName = [System.Net.Dns]::GetHostName()
+$machineIpAddress = Get-PrimaryIPv4Address
+if ([string]::IsNullOrWhiteSpace($machineIpAddress)) {
+    $machineIpAddress = "Unavailable"
+}
+
+$indexPath = Join-Path $PhysicalPath "index.shtml"
+$indexContent = Get-Content -Path $indexPath -Raw
+$indexContent = $indexContent.Replace('<!--#echo var="SERVER_NAME" -->', $machineHostName)
+$indexContent = $indexContent.Replace('<!--#echo var="LOCAL_ADDR" -->', $machineIpAddress)
+Set-Content -Path $indexPath -Value $indexContent
 
 $webConfigPath = Join-Path $PhysicalPath "web.config"
 Write-Host "Validating SSI configuration in web.config..." -ForegroundColor Cyan
