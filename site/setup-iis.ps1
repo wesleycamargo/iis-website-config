@@ -2,7 +2,11 @@ param(
     [string]$SiteName = "MachineInfoSite",
     [string]$PhysicalPath = "C:\inetpub\wwwroot\machine-info",
     [int]$Port = 80,
-    [string]$HostHeader = ""
+    [string]$HostHeader = "",
+    [string]$RepoOwner = "wesleycamargo",
+    [string]$RepoName = "iis-website-config",
+    [string]$RepoRef = "main",
+    [string]$RepoSubPath = "site"
 )
 
 Set-StrictMode -Version Latest
@@ -53,15 +57,41 @@ if (-not (Test-Path -Path $PhysicalPath)) {
     New-Item -Path $PhysicalPath -ItemType Directory -Force | Out-Null
 }
 
-$scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $filesToCopy = @("index.shtml", "styles.css", "web.config")
+$tempDir = $null
 
-foreach ($file in $filesToCopy) {
-    $source = Join-Path $scriptRoot $file
-    if (-not (Test-Path -Path $source)) {
-        throw "Required file not found: $source"
+try {
+    $zipUrl = "https://codeload.github.com/$RepoOwner/$RepoName/zip/refs/heads/$RepoRef"
+    $tempDir = Join-Path $env:TEMP ("iis-setup-" + [guid]::NewGuid().ToString("N"))
+    $zipPath = Join-Path $tempDir "repo.zip"
+    $extractPath = Join-Path $tempDir "repo"
+
+    New-Item -Path $tempDir -ItemType Directory -Force | Out-Null
+    Write-Host "Downloading site content from GitHub ($RepoOwner/$RepoName@$RepoRef)..." -ForegroundColor Cyan
+    Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath
+
+    Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force
+
+    $repoRoot = Join-Path $extractPath ("$RepoName-$RepoRef")
+    $contentRoot = Join-Path $repoRoot $RepoSubPath
+
+    if (-not (Test-Path -Path $contentRoot)) {
+        throw "Repository subpath not found in archive: $RepoSubPath"
     }
-    Copy-Item -Path $source -Destination (Join-Path $PhysicalPath $file) -Force
+
+    foreach ($file in $filesToCopy) {
+        $source = Join-Path $contentRoot $file
+        if (-not (Test-Path -Path $source)) {
+            throw "Required file not found in repository content: $source"
+        }
+        Copy-Item -Path $source -Destination (Join-Path $PhysicalPath $file) -Force
+    }
+} catch {
+    throw "Failed to download or extract website content from GitHub ($RepoOwner/$RepoName@$RepoRef): $($_.Exception.Message)"
+} finally {
+    if ($tempDir -and (Test-Path -Path $tempDir)) {
+        Remove-Item -Path $tempDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }
 
 $appPoolName = "$SiteName-AppPool"
