@@ -46,3 +46,11 @@ Optional parameters:
 ```powershell
 ./setup-iis.ps1 -SiteName "MachineInfoSite" -PhysicalPath "C:\inetpub\wwwroot\machine-info" -Port 8080 -HostHeader ""
 ```
+
+By default, the script is idempotent on the selected port and will take over a conflicting HTTP binding from another site (for example `Default Web Site` on port `80`).
+
+To disable this behavior and fail on conflicts instead:
+
+```powershell
+./setup-iis.ps1 -TakeOverBinding:$false
+```

@@ -6,7 +6,8 @@ param(
     [string]$RepoOwner = "wesleycamargo",
     [string]$RepoName = "iis-website-config",
     [string]$RepoRef = "main",
-    [string]$RepoSubPath = "site"
+    [string]$RepoSubPath = "site",
+    [switch]$TakeOverBinding = $true
 )
 
 Set-StrictMode -Version Latest
@@ -57,6 +58,48 @@ if (-not (Test-Path -Path $PhysicalPath)) {
     New-Item -Path $PhysicalPath -ItemType Directory -Force | Out-Null
 }
 
+function Repair-WebConfigForSsi {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$WebConfigPath
+    )
+
+    [xml]$xml = Get-Content -Path $WebConfigPath
+
+    if (-not $xml.configuration) {
+        throw "Invalid web.config: missing <configuration> root node."
+    }
+
+    $configuration = $xml.configuration
+    $systemWebServer = $configuration.SelectSingleNode("system.webServer")
+    if (-not $systemWebServer) {
+        $systemWebServer = $xml.CreateElement("system.webServer")
+        [void]$configuration.AppendChild($systemWebServer)
+    }
+
+    $ssiNode = $systemWebServer.SelectSingleNode("serverSideInclude")
+    if (-not $ssiNode) {
+        $ssiNode = $xml.CreateElement("serverSideInclude")
+        [void]$systemWebServer.PrependChild($ssiNode)
+    }
+
+    [void]$ssiNode.SetAttribute("enabled", "true")
+
+    $systemWeb = $configuration.SelectSingleNode("system.web")
+    if ($systemWeb) {
+        $invalidSsiNodes = @($systemWeb.SelectNodes("serverSideInclude"))
+        foreach ($node in $invalidSsiNodes) {
+            [void]$systemWeb.RemoveChild($node)
+        }
+
+        if ($systemWeb.ChildNodes.Count -eq 0 -and $systemWeb.Attributes.Count -eq 0) {
+            [void]$configuration.RemoveChild($systemWeb)
+        }
+    }
+
+    $xml.Save($WebConfigPath)
+}
+
 $filesToCopy = @("index.shtml", "styles.css", "web.config")
 $tempDir = $null
 
@@ -94,6 +137,10 @@ try {
     }
 }
 
+$webConfigPath = Join-Path $PhysicalPath "web.config"
+Write-Host "Validating SSI configuration in web.config..." -ForegroundColor Cyan
+Repair-WebConfigForSsi -WebConfigPath $webConfigPath
+
 $appPoolName = "$SiteName-AppPool"
 
 if (-not (Test-Path "IIS:\AppPools\$appPoolName")) {
@@ -106,12 +153,20 @@ $bindingInformation = if ([string]::IsNullOrWhiteSpace($HostHeader)) {
     "*:${Port}:$HostHeader"
 }
 
-$conflictingSite = Get-Website | Where-Object {
+$conflictingSites = Get-Website | Where-Object {
     $_.Name -ne $SiteName -and $_.Bindings.Collection.bindingInformation -contains $bindingInformation
 }
 
-if ($conflictingSite) {
-    throw "Binding conflict: '$bindingInformation' is already used by site '$($conflictingSite.Name)'. Use a different -Port/-HostHeader or remove that binding first."
+if ($conflictingSites) {
+    if (-not $TakeOverBinding) {
+        $siteNames = ($conflictingSites | ForEach-Object { "'$($_.Name)'" }) -join ", "
+        throw "Binding conflict: '$bindingInformation' is already used by $siteNames. Re-run with -TakeOverBinding to automatically remove conflicting bindings."
+    }
+
+    foreach ($site in $conflictingSites) {
+        Write-Host "Removing conflicting binding '$bindingInformation' from site '$($site.Name)'..." -ForegroundColor Yellow
+        Remove-WebBinding -Name $site.Name -Protocol "http" -Port $Port -HostHeader $HostHeader
+    }
 }
 
 if (Get-Website -Name $SiteName -ErrorAction SilentlyContinue) {
@@ -124,6 +179,12 @@ if (Get-Website -Name $SiteName -ErrorAction SilentlyContinue) {
 } else {
     Write-Host "Creating IIS site '$SiteName'..." -ForegroundColor Cyan
     New-Website -Name $SiteName -PhysicalPath $PhysicalPath -Port $Port -HostHeader $HostHeader -ApplicationPool $appPoolName | Out-Null
+}
+
+try {
+    & "$env:windir\System32\inetsrv\appcmd.exe" list config "$SiteName" /section:system.webServer/serverSideInclude | Out-Null
+} catch {
+    throw "IIS configuration validation failed for '$webConfigPath'. Original error: $($_.Exception.Message)"
 }
 
 $siteState = (Get-Website -Name $SiteName).State
