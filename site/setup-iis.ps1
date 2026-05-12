@@ -66,7 +66,13 @@ function Set-IisSiteStaticConfiguration {
     Set-WebConfigurationProperty -PSPath $psPath -Location $location -Filter "system.webServer/defaultDocument" -Name "enabled" -Value "True"
 
     Clear-WebConfiguration -PSPath $psPath -Location $location -Filter "system.webServer/defaultDocument/files"
-    Add-WebConfigurationProperty -PSPath $psPath -Location $location -Filter "system.webServer/defaultDocument/files" -Name "." -Value @{ value = "index.html" }
+    try {
+        Add-WebConfigurationProperty -PSPath $psPath -Location $location -Filter "system.webServer/defaultDocument/files" -Name "." -Value @{ value = "index.html" }
+    } catch {
+        if ($_.Exception.Message -notmatch "duplicate collection entry") {
+            throw
+        }
+    }
 }
 
 function Get-PrimaryIPv4Address {
