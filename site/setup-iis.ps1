@@ -128,7 +128,14 @@ if (Get-Website -Name $SiteName -ErrorAction SilentlyContinue) {
 
 $siteState = (Get-Website -Name $SiteName).State
 if ($siteState -ne "Started") {
-    Start-Website -Name $SiteName
+    Start-WebAppPool -Name $appPoolName -ErrorAction SilentlyContinue
+    try {
+        Start-Website -Name $SiteName
+    } catch {
+        $siteBindings = (Get-WebBinding -Name $SiteName -ErrorAction SilentlyContinue | ForEach-Object { $_.bindingInformation }) -join ", "
+        $appPoolState = (Get-WebAppPoolState -Name $appPoolName -ErrorAction SilentlyContinue).Value
+        throw "Failed to start IIS site '$SiteName'. AppPool='$appPoolName' State='$appPoolState' Bindings='$siteBindings'. Original error: $($_.Exception.Message)"
+    }
 }
 
 $localUrl = if ([string]::IsNullOrWhiteSpace($HostHeader)) {
