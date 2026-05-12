@@ -106,6 +106,14 @@ $bindingInformation = if ([string]::IsNullOrWhiteSpace($HostHeader)) {
     "*:${Port}:$HostHeader"
 }
 
+$conflictingSite = Get-Website | Where-Object {
+    $_.Name -ne $SiteName -and $_.Bindings.Collection.bindingInformation -contains $bindingInformation
+}
+
+if ($conflictingSite) {
+    throw "Binding conflict: '$bindingInformation' is already used by site '$($conflictingSite.Name)'. Use a different -Port/-HostHeader or remove that binding first."
+}
+
 if (Get-Website -Name $SiteName -ErrorAction SilentlyContinue) {
     Write-Host "Updating existing site '$SiteName'..." -ForegroundColor Yellow
     Set-ItemProperty "IIS:\Sites\$SiteName" -Name physicalPath -Value $PhysicalPath
@@ -118,7 +126,10 @@ if (Get-Website -Name $SiteName -ErrorAction SilentlyContinue) {
     New-Website -Name $SiteName -PhysicalPath $PhysicalPath -Port $Port -HostHeader $HostHeader -ApplicationPool $appPoolName | Out-Null
 }
 
-Start-Website -Name $SiteName
+$siteState = (Get-Website -Name $SiteName).State
+if ($siteState -ne "Started") {
+    Start-Website -Name $SiteName
+}
 
 $localUrl = if ([string]::IsNullOrWhiteSpace($HostHeader)) {
     "http://localhost:${Port}/"
