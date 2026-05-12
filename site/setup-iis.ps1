@@ -65,11 +65,29 @@ function Set-IisSiteStaticConfiguration {
 
     Set-WebConfigurationProperty -PSPath $psPath -Location $location -Filter "system.webServer/defaultDocument" -Name "enabled" -Value "True"
 
-    $defaultDocs = Get-WebConfigurationProperty -PSPath $psPath -Location $location -Filter "system.webServer/defaultDocument/files" -Name "."
-    $hasIndexHtml = $defaultDocs | Where-Object { $_.value -eq "index.html" }
+    $defaultDocs = @(Get-WebConfigurationProperty -PSPath $psPath -Location $location -Filter "system.webServer/defaultDocument/files" -Name ".")
+    $defaultDocValues = @(
+        $defaultDocs | ForEach-Object {
+            if ($_ -is [string]) {
+                $_
+            } elseif ($_.value) {
+                $_.value
+            } elseif ($_.Attributes -and $_.Attributes["value"]) {
+                $_.Attributes["value"].Value
+            }
+        }
+    )
+
+    $hasIndexHtml = $defaultDocValues -contains "index.html"
 
     if (-not $hasIndexHtml) {
-        Add-WebConfigurationProperty -PSPath $psPath -Location $location -Filter "system.webServer/defaultDocument/files" -Name "." -Value @{ value = "index.html" }
+        try {
+            Add-WebConfigurationProperty -PSPath $psPath -Location $location -Filter "system.webServer/defaultDocument/files" -Name "." -Value @{ value = "index.html" }
+        } catch {
+            if ($_.Exception.Message -notmatch "duplicate collection entry") {
+                throw
+            }
+        }
     }
 }
 
