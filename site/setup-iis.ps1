@@ -63,8 +63,14 @@ function Set-IisSiteStaticConfiguration {
     $psPath = "IIS:\"
     $location = $SiteName
 
-    Clear-WebConfiguration -PSPath $psPath -Location $location -Filter "system.webServer/defaultDocument/files"
-    Add-WebConfigurationProperty -PSPath $psPath -Location $location -Filter "system.webServer/defaultDocument/files" -Name "." -Value @{ value = "index.html" }
+    Set-WebConfigurationProperty -PSPath $psPath -Location $location -Filter "system.webServer/defaultDocument" -Name "enabled" -Value "True"
+
+    $defaultDocs = Get-WebConfigurationProperty -PSPath $psPath -Location $location -Filter "system.webServer/defaultDocument/files" -Name "."
+    $hasIndexHtml = $defaultDocs | Where-Object { $_.value -eq "index.html" }
+
+    if (-not $hasIndexHtml) {
+        Add-WebConfigurationProperty -PSPath $psPath -Location $location -Filter "system.webServer/defaultDocument/files" -Name "." -Value @{ value = "index.html" }
+    }
 }
 
 function Get-PrimaryIPv4Address {
