@@ -154,7 +154,18 @@ $bindingInformation = if ([string]::IsNullOrWhiteSpace($HostHeader)) {
 }
 
 $conflictingSites = Get-Website | Where-Object {
-    $_.Name -ne $SiteName -and $_.Bindings.Collection.bindingInformation -contains $bindingInformation
+    if ($_.Name -eq $SiteName) {
+        return $false
+    }
+
+    $siteBindings = Get-WebBinding -Name $_.Name -ErrorAction SilentlyContinue
+    if (-not $siteBindings) {
+        return $false
+    }
+
+    $siteBindings | Where-Object {
+        $_.protocol -eq "http" -and $_.bindingInformation -eq $bindingInformation
+    }
 }
 
 if ($conflictingSites) {
