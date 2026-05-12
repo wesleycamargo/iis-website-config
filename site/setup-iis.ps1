@@ -100,7 +100,7 @@ function Repair-WebConfigForSsi {
     $xml.Save($WebConfigPath)
 }
 
-$filesToCopy = @("index.shtml", "styles.css", "web.config")
+$filesToCopy = @("index.shtml", "web.config")
 $tempDir = $null
 
 function Get-PrimaryIPv4Address {

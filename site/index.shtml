@@ -4,31 +4,28 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Machine Info</title>
-  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <main class="card">
-    <h1>Machine Info</h1>
-    <p class="subtitle">Served by IIS using Server Side Includes (SSI)</p>
+  <h1>Machine Info</h1>
+  <p>Served by IIS using Server Side Includes (SSI)</p>
 
-    <dl class="info-grid">
-      <div>
-        <dt>Hostname</dt>
-        <dd><!--#echo var="SERVER_NAME" --></dd>
-      </div>
-      <div>
-        <dt>Server IP</dt>
-        <dd><!--#echo var="LOCAL_ADDR" --></dd>
-      </div>
-      <div>
-        <dt>Server Port</dt>
-        <dd><!--#echo var="SERVER_PORT" --></dd>
-      </div>
-      <div>
-        <dt>Timestamp (UTC)</dt>
-        <dd><!--#echo var="DATE_GMT" --></dd>
-      </div>
-    </dl>
-  </main>
+  <table>
+    <tr>
+      <td>Hostname</td>
+      <td><!--#echo var="SERVER_NAME" --></td>
+    </tr>
+    <tr>
+      <td>Server IP</td>
+      <td><!--#echo var="LOCAL_ADDR" --></td>
+    </tr>
+    <tr>
+      <td>Server Port</td>
+      <td><!--#echo var="SERVER_PORT" --></td>
+    </tr>
+    <tr>
+      <td>Timestamp (UTC)</td>
+      <td><!--#echo var="DATE_GMT" --></td>
+    </tr>
+  </table>
 </body>
 </html>
